@@ -9,6 +9,8 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
@@ -36,7 +38,16 @@ public class GitHubService {
     @Tool(name = "getAllPullRequests", description = "Retrieves all the pull requests based in the pull request state")
     public Mono<List<String>> getAllPullRequests(@ToolParam(description = "state parameter to retrieve the pull requests based on their state", required = false) String state) {
         logger.info("getAllPullRequests");
-        Mono<List<String>> objectFlux = webClient.get().uri(githubOwner + "/" + githubRepo + "/pulls?state=" + state).retrieve().bodyToFlux(String.class).collectList();
+        Mono<List<String>> objectFlux = webClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/{owner}/{repo}/pulls")
+                        .queryParam("state", state)
+                        .build(githubOwner, githubRepo))
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, response ->
+                Mono.error(new RuntimeException("GitHub API returned error: " + response.statusCode())))
+                .bodyToFlux(String.class)
+                .collectList();
         return objectFlux;
     }
 }
