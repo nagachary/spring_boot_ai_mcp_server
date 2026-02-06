@@ -24,16 +24,16 @@ public class APIConfiguration {
 
     @Bean("GITHUB_WEBCLIENT")
     public WebClient webClient() {
-        logger.info("webClient");
+        logger.info("Initializing GitHub WebClient");
 
-        return WebClient
-                .builder()
+        return WebClient.builder()
                 .baseUrl(gitHubApiBasePath)
                 .defaultHeaders(header -> {
                     header.add(HttpHeaders.CONTENT_TYPE, "application/vnd.github+json");
+                    header.add(HttpHeaders.ACCEPT, "application/vnd.github+json");
                     header.add("X-GitHub-Api-Version", apiVersion);
                     header.add("Authorization", "Bearer " + bearerToken);
-                }).build();
+                })
+                .build();
     }
 }
-
