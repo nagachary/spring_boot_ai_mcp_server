@@ -35,5 +35,11 @@ build/
 
 .target
 *.log
+# Docker
+.env
+
+# Logs
+*.log
+
 spring_boot_ai_mcp_server.log
 /spring_boot_ai_mcp_server.log

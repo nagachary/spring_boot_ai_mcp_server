@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  mcp-server:
+    build: .
+    container_name: mcp-server
+    ports:
+      - "8088:8088"
+    environment:
+      GITHUB_API_BEARER_TOKEN: ${GITHUB_API_BEARER_TOKEN}
+      MCP_SERVER_SHARED_API_KEY: ${MCP_SERVER_SHARED_API_KEY}
+      MCP_AUTH_JWT_SECRET: ${MCP_AUTH_JWT_SECRET}
+    restart: unless-stopped
