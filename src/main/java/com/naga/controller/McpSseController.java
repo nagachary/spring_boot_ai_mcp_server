@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.*;
@@ -18,7 +19,6 @@ import java.util.*;
 @RestController
 @RequestMapping("/mcp")
 public class McpSseController {
-
     private static final Logger logger = LoggerFactory.getLogger(McpSseController.class);
     private final GitHubToolsService gitHubToolsService;
 
@@ -76,35 +76,46 @@ public class McpSseController {
      * Execute a specific MCP tool
      */
     @PostMapping("/tools/call")
-    public Map<String, Object> callTool(@RequestBody Map<String, Object> request) {
+    public Mono<Map<String, Object>> callTool(@RequestBody Map<String, Object> request) {
+        long startTime = System.currentTimeMillis();
         String toolName = (String) request.get("name");
         @SuppressWarnings("unchecked")
         Map<String, Object> arguments = (Map<String, Object>) request.getOrDefault("arguments", new HashMap<>());
-
-        logger.info("Calling tool: {} with arguments: {}", toolName, arguments);
-
-        Map<String, Object> response = new HashMap<>();
-
+        logger.info("REQUEST: tool={}, args={}", toolName, arguments);
         try {
-            // Route to the appropriate tool
             if ("getAllPullRequests".equals(toolName)) {
                 String state = (String) arguments.getOrDefault("state", "open");
-                List<Map<String, Object>> result = gitHubToolsService.getAllPullRequests(state);
-
-                response.put("status", "success");
-                response.put("result", result);
-                logger.info("Tool executed successfully, returned {} items", result.size());
+                return gitHubToolsService.getAllPullRequests(state)
+                        .map(result -> {
+                            Map<String, Object> response = new HashMap<>();
+                            response.put("status", "success");
+                            response.put("result", result);
+                            logger.info("Tool executed successfully, returned {} items", result.size());
+                            return response;
+                        })
+                        .doOnError(e -> {
+                            long elapsed = System.currentTimeMillis() - startTime;
+                            logger.error("✗ ERROR: tool={}, duration={}ms, error={}",
+                                    toolName, elapsed, e.getMessage());
+                        })
+                        .onErrorResume(e -> {
+                            Map<String, Object> errorResponse = new HashMap<>();
+                            logger.error("Error calling tool {}: {}", toolName, e.getMessage(), e);
+                            errorResponse.put("status", "error");
+                            errorResponse.put("error", e.getMessage());
+                            return Mono.just(errorResponse);
+                        });
             } else {
                 throw new IllegalArgumentException("Unknown tool: " + toolName);
             }
 
         } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
             logger.error("Error calling tool {}: {}", toolName, e.getMessage(), e);
-            response.put("status", "error");
-            response.put("error", e.getMessage());
+            errorResponse.put("status", "error");
+            errorResponse.put("error", e.getMessage());
+            return Mono.just(errorResponse);
         }
-
-        return response;
     }
 
     /**
@@ -113,6 +124,7 @@ public class McpSseController {
     @GetMapping("/info")
     public Map<String, Object> getServerInfo() {
         Map<String, Object> info = new HashMap<>();
+
         info.put("name", "spring_boot_ai_mcp_server");
         info.put("version", "1.0.0");
         info.put("protocol", "SSE");
